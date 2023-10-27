@@ -36,7 +36,6 @@ validpgpkeys=('474E22316ABF4785A88C6E8EA2C794A986419D8A'  # Tom Stellard <tstell
               'D574BD5D1D0E98895E3BF90044F2485E45D59042') # Tobias Hieta <tobias@hieta.se>
 
 prepare() {
-  mv llvm-project{-$pkgver.src,}
   cd llvm-project-$pkgver.src
   mkdir build
   cd clang
