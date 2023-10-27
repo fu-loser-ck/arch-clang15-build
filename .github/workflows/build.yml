@@ -1,0 +1,27 @@
+name: Build
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Makepkg Build and Check
+      id: makepkg
+      uses: fu-loser-ck/pkgbuild-action@v1.1.8-1
+      with:
+        makepkgArgs: --skippgpcheck
+
+    - name: Upload packages
+      run: |
+        mkdir upload
+        mv ./*pkg.tar.zst* ./upload
+
+    - name: Upload
+      uses: actions/upload-artifact@v3
+      with:
+        name: pkgup
+        path: upload/*
