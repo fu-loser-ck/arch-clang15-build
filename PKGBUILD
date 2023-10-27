@@ -19,62 +19,27 @@ provides=("clang-analyzer=$pkgver" "clang-tools-extra=$pkgver")
 conflicts=('clang-analyzer' 'clang-tools-extra')
 replaces=('clang-analyzer' 'clang-tools-extra')
 _source_base=https://github.com/llvm/llvm-project/releases/download/llvmorg-$pkgver
-source=($_source_base/clang-$pkgver.src.tar.xz{,.sig}
-        $_source_base/clang-tools-extra-$pkgver.src.tar.xz{,.sig}
-        $_source_base/llvm-$pkgver.src.tar.xz{,.sig}
-        $_source_base/cmake-$pkgver.src.tar.xz{,.sig}
-        $_source_base/compiler-rt-$pkgver.src.tar.xz{,.sig}
+source=($_source_base/llvm-project-$pkgver.src.tar.xz{,.sig}
         $pkgname-linker-wrapper-tool.patch::https://github.com/llvm/llvm-project/commit/c2aabcfc8395.patch
         $pkgname-structured-bindings-r1.patch::https://github.com/llvm/llvm-project/commit/127bf4438542.patch
         $pkgname-bitfield-value-capture.patch::https://github.com/llvm/llvm-project/commit/a1a71b7dc97b.patch
         enable-fstack-protector-strong-by-default.patch
         llvm-config.h)
-sha256sums=('a6b673ef15377fb46062d164e8ddc4d05c348ff8968f015f7f4af03f51000067'
+sha256sums=('8b5fcb24b4128cf04df1b0b9410ce8b1a729cb3c544e6da885d234280dedeac6'
             'SKIP'
-            '809a2ef46d46be3b83ca389356404ac041fa6d8f5496cb02ec35d252afb64fd1'
-            'SKIP'
-            '4ad8b2cc8003c86d0078d15d987d84e3a739f24aae9033865c027abae93ee7a4'
-            'SKIP'
-            '8986f29b634fdaa9862eedda78513969fe9788301c9f2d938f4c10a3e7a3e7ea'
-            'SKIP'
-            '353832c66cce60931ea0413b3c071faad59eefa70d02c97daa8978b15e4b25b7'
-            'SKIP'
-            '75f220b68622a57b49a9480fe2ee321c7ff9b5ce643091b6cb510b9e38400e92'
-            '2b613e392b00aebbef27639d8f5c4a3252983e5497f9cff4eca44286ac692aa4'
-            '0ae44d6e6f080364c74238b2960a3f23ecdc355ea96997eb2e8180a708007d39'
+            '640ac4858c68cc6d52226afe01a67ad017f95511636b631d826b791c5b11a47e'
+            '6092fa872e2a706de12d1efb0626a4e9ef9854014edc68edb5ebac2ad27e2d9f'
+            'd432e706fd99e7817ea0cbb02795918a781a11e4f5e6d304d53fffec9856b6f4'
             '7a9ce949579a3b02d4b91b6835c4fb45adc5f743007572fb0e28e6433e48f3a5'
             '597dc5968c695bbdbb0eac9e8eb5117fcd2773bc91edf5ec103ecffffab8bc48')
 validpgpkeys=('474E22316ABF4785A88C6E8EA2C794A986419D8A'  # Tom Stellard <tstellar@redhat.com>
               'D574BD5D1D0E98895E3BF90044F2485E45D59042') # Tobias Hieta <tobias@hieta.se>
 
-# Utilizing LLVM_DISTRIBUTION_COMPONENTS to avoid
-# installing static libraries; inspired by Gentoo
-_get_distribution_components() {
-  local target
-  ninja -t targets | grep -Po 'install-\K.*(?=-stripped:)' | while read -r target; do
-    case $target in
-      clang-libraries|distribution)
-        continue
-        ;;
-      clang-tidy-headers)
-        continue
-        ;;
-      clang|clangd|clang-*)
-        ;;
-      clang*|findAllSymbols)
-        continue
-        ;;
-    esac
-    echo $target
-  done
-}
-
 prepare() {
-  mv cmake{-$pkgver.src,}
-  mkdir -p llvm-$pkgver.src/build
-  mkdir -p compiler-rt-$pkgver.src/build
-  cd clang-$pkgver.src
+  mv llvm-project{-$pkgver.src,}
+  cd llvm-project-$pkgver.src
   mkdir build
+  cd clang
   mv "$srcdir/clang-tools-extra-$pkgver.src" tools/extra
   patch -Np2 -i ../enable-fstack-protector-strong-by-default.patch
 
@@ -95,19 +60,24 @@ prepare() {
 
 build() {
   # ----------
-  # Build llvm
-  cd llvm-$pkgver.src/build
+  # Build ALL
+  cd llvm-project-$pkgver.src/build
 
   # Build only minimal debug info to reduce size
   CFLAGS=${CFLAGS/-g /-g1 }
   CXXFLAGS=${CXXFLAGS/-g /-g1 }
 
-  local llvm_cmake_args=(
+  local cmake_args=(
     -G Ninja
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_DOCDIR=share/doc
-    -DCMAKE_INSTALL_PREFIX="$pkgdir/usr/clang15"
+    -DCMAKE_INSTALL_PREFIX=/usr/clang15
     -DCMAKE_SKIP_RPATH=ON
+    -DCOMPILER_RT_INSTALL_PATH="/usr/clang15/lib/clang/$pkgver"
+    -DCLANG_DEFAULT_PIE_ON_LINUX=ON
+    -DCLANG_LINK_CLANG_DYLIB=ON
+    -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;compiler-rt;lld;lldb;libcxx;libcxxabi"
+    -DENABLE_LINKER_BUILD_ID=ON
     -DLLVM_BINUTILS_INCDIR=/usr
     -DLLVM_BUILD_DOCS=ON
     -DLLVM_BUILD_LLVM_DYLIB=ON
@@ -121,12 +91,29 @@ build() {
     -DLLVM_INSTALL_UTILS=ON
     -DLLVM_LINK_LLVM_DYLIB=ON
     -DLLVM_USE_PERF=ON
+    -DLLVM_EXTERNAL_LIT="/usr/clang15/bin/lit"
+    -DLLVM_MAIN_SRC_DIR="$srcdir/llvm-$pkgver.src"
     -DSPHINX_WARNINGS_AS_ERRORS=OFF
   )
 
-  cmake .. "${llvm_cmake_args[@]}"
+  cmake ../llvm "${cmake_args[@]}"
   ninja
+}
+
+check() {
+  cd llvm-project-$pkgver.src/build
   LD_LIBRARY_PATH=$PWD/lib ninja check
+}
+
+_python_optimize() {
+  python -m compileall "$@"
+  python -O -m compileall "$@"
+  python -OO -m compileall "$@"
+}
+
+package() {
+  cd llvm-project-$pkgver.src/build
+
   DESTDIR="$pkgdir" ninja install
 
   # Include lit for running lit-based tests in other projects
@@ -145,11 +132,6 @@ build() {
     cp "$srcdir/llvm-config.h" "$pkgdir/usr/clang15/include/llvm/Config/llvm-config.h"
   fi
 
-  # Remove documentation sources
-  rm -r "$pkgdir"/usr/clang15/share/doc/llvm/html/{_sources,.buildinfo}
-
-  install -Dm644 ../LICENSE.TXT "$pkgdir/usr/clang15/share/licenses/$pkgname/LICENSE"
-
   # Install libs
   cd "$srcdir"
   install -d "$pkgdir/usr/clang15/lib"
@@ -163,82 +145,7 @@ build() {
   install -d "$pkgdir/usr/clang15/lib/bfd-plugins"
   ln -s ../LLVMgold.so "$pkgdir/usr/clang15/lib/bfd-plugins/LLVMgold.so"
 
-  install -Dm644 "$srcdir/llvm-$pkgver.src/LICENSE.TXT" \
-    "$pkgdir/usr/clang15/share/licenses/$pkgname/LICENSE"
-
-  # -----------------
-  # Build compiler-rt
-  cd compiler-rt-$pkgver.src/build
-
-  local compiler_rt_cmake_args=(
-    -G Ninja
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_PREFIX_PATH="$pkgdir/usr/clang15"
-    -DCMAKE_INSTALL_PREFIX="$pkgdir/usr/clang15"
-    -DCMAKE_SKIP_RPATH=ON
-    -DCOMPILER_RT_INSTALL_PATH="$pkgdir/usr/clang15/lib/clang/$pkgver"
-  )
-  cmake .. "${compiler_rt_cmake_args[@]}"
-  ninja
-  DESTDIR="$pkgdir" ninja install
-  install -Dm644 ../LICENSE.TXT "$pkgdir/usr/clang15/share/licenses/$pkgname/LICENSE"
-
-  # ------------
-  # Build clang15
-  cd ../clang-$pkgver.src/build
-
-  CFLAGS=${CFLAGS/-g /-g1 }
-  CXXFLAGS=${CXXFLAGS/-g /-g1 }
-
-  local clang_cmake_args=(
-    -G Ninja
-    -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_PREFIX_PATH="$pkgdir/usr/clang15"
-    -DCMAKE_INSTALL_PREFIX=/usr/clang15
-    -DCMAKE_INSTALL_DOCDIR=share/doc
-    -DCMAKE_SKIP_RPATH=ON
-    -DCLANG_DEFAULT_PIE_ON_LINUX=ON
-    -DCLANG_LINK_CLANG_DYLIB=ON
-    -DENABLE_LINKER_BUILD_ID=ON
-    -DLLVM_BUILD_DOCS=ON
-    -DLLVM_BUILD_TESTS=ON
-    -DLLVM_ENABLE_RTTI=ON
-    -DLLVM_ENABLE_SPHINX=ON
-    -DLLVM_EXTERNAL_LIT="$pkgdir/usr/clang15/bin/lit"
-    -DLLVM_INCLUDE_DOCS=ON
-    -DLLVM_LINK_LLVM_DYLIB=ON
-    -DLLVM_MAIN_SRC_DIR="$srcdir/llvm-$pkgver.src"
-    -DSPHINX_WARNINGS_AS_ERRORS=OFF
-  )
-
-  cmake .. "${clang_cmake_args[@]}"
-  local distribution_components=$(_get_distribution_components | paste -sd\;)
-  test -n "$distribution_components"
-  clang_cmake_args+=(-DLLVM_DISTRIBUTION_COMPONENTS="$distribution_components")
-
-  cmake .. "${clang_cmake_args[@]}"
-  ninja
-}
-
-check() {
-  cd ../clang-$pkgver.src/build
-  LD_LIBRARY_PATH=$PWD/lib ninja check-clang{,-tools}
-}
-
-_python_optimize() {
-  python -m compileall "$@"
-  python -O -m compileall "$@"
-  python -OO -m compileall "$@"
-}
-
-package() {
-  cd clang-$pkgver.src/build
-
-  DESTDIR="$pkgdir" ninja install-distribution
-  install -Dm644 ../LICENSE.TXT "$pkgdir/usr/clang15/share/licenses/$pkgname/LICENSE"
-
-  # Remove documentation sources
-  rm -r "$pkgdir"/usr/clang15/share/doc/clang{,-tools}/html/{_sources,.buildinfo}
+  install -Dm644 ../llvm/LICENSE.TXT "$pkgdir/usr/clang15/share/licenses/$pkgname/LICENSE"
 
   # Move scanbuild-py into site-packages and install Python bindings
   local site_packages=$(python -c "import site; print(site.getsitepackages()[0])")
