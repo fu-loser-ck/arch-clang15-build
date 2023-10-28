@@ -1,4 +1,4 @@
-# Maintainer: Evangelos Foutras <evangelos@foutrelis.com>
++# Maintainer: Evangelos Foutras <evangelos@foutrelis.com>
 # Contributor: Jan "heftig" Steffens <jan.steffens@gmail.com>
 
 pkgname=clang15-all
@@ -38,8 +38,6 @@ validpgpkeys=('474E22316ABF4785A88C6E8EA2C794A986419D8A'  # Tom Stellard <tstell
 prepare() {
   cd llvm-project-$pkgver.src
   mkdir build
-  cd clang
-  mv "$srcdir/clang-tools-extra-$pkgver.src" tools/extra
   patch -Np2 -i ../enable-fstack-protector-strong-by-default.patch
 
   # https://reviews.llvm.org/D145862
@@ -54,7 +52,7 @@ prepare() {
 
   # Attempt to convert script to Python 3
   2to3 -wn --no-diffs \
-    tools/extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py
+    clang-tools-extra/clang-include-fixer/find-all-symbols/tool/run-find-all-symbols.py
 }
 
 build() {
